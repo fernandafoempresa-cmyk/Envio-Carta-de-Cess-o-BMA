@@ -1,0 +1,1434 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Consolidador de Sacados — BMA</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap');
+
+  :root{
+    --navy-950:#0a0f1c;
+    --navy-900:#0f1729;
+    --navy-800:#151f38;
+    --navy-700:#1e2a48;
+    --line:#26314e;
+    --paper:#f6f7fb;
+    --card:#ffffff;
+    --ink:#0d1424;
+    --ink-soft:#5b6479;
+    --accent:#3d5afe;
+    --accent-deep:#2438c7;
+    --good:#0f9d6b;
+    --good-bg:#e6f7f0;
+    --warn:#c77d16;
+    --warn-bg:#fdf1e0;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter',sans-serif;
+    min-height:100vh;
+  }
+
+  /* ---------- Top bar ---------- */
+  .topbar{
+    background:linear-gradient(180deg,var(--navy-950),var(--navy-900));
+    padding:34px 40px 64px;
+    position:relative;
+    overflow:hidden;
+  }
+  .topbar::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    background-image:
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.035) 0px, rgba(255,255,255,0.035) 1px, transparent 1px, transparent 64px);
+    pointer-events:none;
+  }
+  .topbar-inner{position:relative; max-width:1180px; margin:0 auto;}
+  .eyebrow{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:#8fa1ff;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:16px;
+  }
+  .eyebrow::before{content:"";width:7px;height:7px;border-radius:50%;background:#8fa1ff;box-shadow:0 0 0 4px rgba(143,161,255,0.15);}
+  .topbar h1{
+    font-family:'Manrope',sans-serif;
+    font-weight:800;
+    font-size:clamp(28px,3.4vw,40px);
+    color:#fff;
+    margin:0 0 10px;
+    letter-spacing:-0.01em;
+  }
+  .topbar p{
+    color:#9aa4c2;
+    font-size:15px;
+    max-width:560px;
+    margin:0;
+    line-height:1.55;
+  }
+
+  /* ---------- Main container ---------- */
+  .wrap{max-width:1180px; margin:-40px auto 60px; padding:0 40px;}
+
+  /* ---------- Upload card ---------- */
+  .dropzone{
+    background:var(--card);
+    border:1.5px dashed #c7cde0;
+    border-radius:16px;
+    padding:38px;
+    text-align:center;
+    box-shadow:0 20px 40px -24px rgba(15,23,42,0.25);
+    transition:border-color .15s ease, background .15s ease;
+    cursor:pointer;
+  }
+  .dropzone.drag{
+    border-color:var(--accent);
+    background:#f3f5ff;
+  }
+  .dropzone .icon{
+    width:46px;height:46px;margin:0 auto 14px;
+    border-radius:12px;
+    background:var(--navy-900);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .dropzone .icon svg{width:22px;height:22px;}
+  .dropzone h3{
+    font-family:'Manrope',sans-serif;
+    font-weight:700;
+    font-size:17px;
+    margin:0 0 4px;
+  }
+  .dropzone p{
+    color:var(--ink-soft);
+    font-size:13.5px;
+    margin:0 0 16px;
+  }
+  .btn{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    background:var(--accent);
+    color:#fff;
+    border:none;
+    padding:11px 20px;
+    border-radius:10px;
+    font-family:'Inter',sans-serif;
+    font-weight:600;
+    font-size:13.5px;
+    cursor:pointer;
+    transition:background .15s ease, transform .1s ease;
+  }
+  .btn:hover{background:var(--accent-deep);}
+  .btn:active{transform:scale(0.98);}
+  .btn.secondary{
+    background:transparent;
+    color:var(--ink);
+    border:1.5px solid #d6dae8;
+  }
+  .btn.secondary:hover{background:#eef0f7; border-color:#c2c8de;}
+  .filename{
+    margin-top:14px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px;
+    color:var(--ink-soft);
+  }
+  input[type=file]{display:none;}
+
+  /* ---------- Status / errors ---------- */
+  .alert{
+    margin-top:16px;
+    padding:13px 16px;
+    border-radius:10px;
+    font-size:13.5px;
+    display:none;
+    text-align:left;
+    line-height:1.5;
+  }
+  .alert.show{display:block;}
+  .alert.error{background:#fdeaea; color:#a5222c; border:1px solid #f4c4c8;}
+  .alert.info{background:#eef1ff; color:#2f3fae; border:1px solid #d3d9ff;}
+
+  /* ---------- Summary stats ---------- */
+  .stats{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:14px;
+    margin:28px 0 22px;
+  }
+  .stat{
+    background:var(--card);
+    border:1px solid #e7e9f2;
+    border-radius:14px;
+    padding:18px 20px;
+  }
+  .stat .label{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10.5px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+    margin-bottom:8px;
+  }
+  .stat .value{
+    font-family:'Manrope',sans-serif;
+    font-weight:800;
+    font-size:24px;
+    color:var(--ink);
+  }
+  .stat.highlight{background:var(--navy-900);}
+  .stat.highlight .label{color:#8fa1ff;}
+  .stat.highlight .value{color:#fff;}
+
+  /* ---------- Table section ---------- */
+  .table-card{
+    background:var(--card);
+    border:1px solid #e7e9f2;
+    border-radius:16px;
+    overflow:hidden;
+    box-shadow:0 20px 40px -28px rgba(15,23,42,0.2);
+    display:none;
+  }
+  .table-card.show{display:block;}
+  .tabs{
+    display:flex;
+    gap:4px;
+    padding:14px 22px 0;
+    border-bottom:1px solid #eceef5;
+  }
+  .tab{
+    background:transparent;
+    border:none;
+    padding:10px 16px;
+    font-family:'Inter',sans-serif;
+    font-weight:600;
+    font-size:13px;
+    color:var(--ink-soft);
+    cursor:pointer;
+    border-radius:8px 8px 0 0;
+    position:relative;
+    top:1px;
+  }
+  .tab:hover{color:var(--ink); background:#f5f6fa;}
+  .tab.active{
+    color:var(--accent-deep);
+    border-bottom:2px solid var(--accent);
+  }
+  .table-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:18px 22px;
+    border-bottom:1px solid #eceef5;
+    gap:16px;
+    flex-wrap:wrap;
+  }
+  .table-head h2{
+    font-family:'Manrope',sans-serif;
+    font-weight:800;
+    font-size:16px;
+    margin:0;
+  }
+  .search{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    background:var(--paper);
+    border:1px solid #dfe3ef;
+    border-radius:9px;
+    padding:8px 12px;
+    min-width:240px;
+  }
+  .search svg{width:14px;height:14px; color:var(--ink-soft); flex-shrink:0;}
+  .search input{
+    border:none;background:transparent;outline:none;
+    font-family:'Inter',sans-serif; font-size:13px; width:100%;
+    color:var(--ink);
+  }
+  .table-scroll{overflow-x:auto;}
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  thead th{
+    text-align:left;
+    font-family:'JetBrains Mono',monospace;
+    font-size:10.5px;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+    background:#fafbfd;
+    padding:12px 16px;
+    border-bottom:1px solid #eceef5;
+    white-space:nowrap;
+    cursor:pointer;
+    user-select:none;
+  }
+  thead th:hover{color:var(--ink);}
+  thead th .arrow{margin-left:4px; opacity:0.4; font-size:10px;}
+  tbody td{
+    padding:13px 16px;
+    border-bottom:1px solid #f1f2f8;
+    vertical-align:top;
+    color:var(--ink);
+  }
+  tbody tr:hover{background:#fafbff;}
+  tbody tr:last-child td{border-bottom:none;}
+  td.num{
+    font-family:'JetBrains Mono',monospace;
+    font-weight:700;
+    text-align:right;
+    white-space:nowrap;
+    color:var(--good);
+  }
+  td.cnpj{font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--ink-soft);}
+  td.wrap-list{max-width:280px; font-size:12px; color:var(--ink-soft); line-height:1.5;}
+  .badge{
+    display:inline-block;
+    background:var(--warn-bg);
+    color:var(--warn);
+    font-family:'JetBrains Mono',monospace;
+    font-size:10.5px;
+    font-weight:700;
+    padding:2px 7px;
+    border-radius:6px;
+    margin-left:6px;
+  }
+  .table-foot{
+    padding:16px 22px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    border-top:1px solid #eceef5;
+    flex-wrap:wrap;
+    gap:12px;
+  }
+  .table-foot .count{font-size:12.5px; color:var(--ink-soft);}
+
+  /* ---------- Firebase config panel ---------- */
+  .fb-panel{
+    background:var(--card);
+    border:1px solid #e7e9f2;
+    border-radius:14px;
+    padding:16px 20px;
+    margin-top:16px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    flex-wrap:wrap;
+  }
+  .fb-status{display:flex; align-items:center; gap:10px; font-size:13px;}
+  .fb-dot{width:9px; height:9px; border-radius:50%; background:#c7cbdb; flex-shrink:0;}
+  .fb-dot.on{background:var(--good); box-shadow:0 0 0 4px var(--good-bg);}
+  .fb-dot.off{background:#d1455a; box-shadow:0 0 0 4px #fce3e6;}
+  .fb-label{font-weight:600; color:var(--ink);}
+  .fb-sub{color:var(--ink-soft); font-size:12px;}
+  .fb-actions{display:flex; gap:10px; flex-wrap:wrap;}
+
+  .modal-overlay{
+    display:none;
+    position:fixed; inset:0; background:rgba(10,15,28,0.55);
+    align-items:center; justify-content:center; z-index:50; padding:20px;
+  }
+  .modal-overlay.show{display:flex;}
+  .modal{
+    background:#fff; border-radius:16px; padding:26px 28px; max-width:460px; width:100%;
+    box-shadow:0 30px 60px -20px rgba(0,0,0,0.4);
+  }
+  .modal h3{font-family:'Manrope',sans-serif; font-weight:800; font-size:17px; margin:0 0 6px;}
+  .modal p{font-size:13px; color:var(--ink-soft); margin:0 0 16px; line-height:1.5;}
+  .modal label{font-size:12px; font-weight:600; color:var(--ink); display:block; margin:12px 0 5px;}
+  .modal input{
+    width:100%; padding:9px 11px; border:1.5px solid #dde1ee; border-radius:8px;
+    font-family:'JetBrains Mono',monospace; font-size:12.5px; outline:none;
+  }
+  .modal input:focus{border-color:var(--accent);}
+  .modal-actions{display:flex; justify-content:flex-end; gap:10px; margin-top:20px;}
+
+  .status-badge{
+    display:inline-flex; align-items:center; gap:6px;
+    font-family:'JetBrains Mono',monospace; font-size:11.5px; font-weight:700;
+    padding:4px 9px; border-radius:7px; white-space:nowrap;
+  }
+  .status-badge.enviado{background:var(--good-bg); color:var(--good);}
+  .status-badge.pendente{background:#eef0f5; color:var(--ink-soft);}
+  .status-badge .dot{width:6px; height:6px; border-radius:50%; background:currentColor;}
+
+  /* ---------- Filter bar ---------- */
+  .filter-bar{
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    padding:14px 22px;
+    border-bottom:1px solid #eceef5;
+    background:#fafbfd;
+  }
+  .filter-bar select, .filter-bar input[type=text]{
+    font-family:'Inter',sans-serif;
+    font-size:12.5px;
+    padding:8px 10px;
+    border:1.5px solid #dde1ee;
+    border-radius:8px;
+    background:#fff;
+    color:var(--ink);
+    min-width:140px;
+  }
+  .filter-bar select:focus, .filter-bar input:focus{outline:none; border-color:var(--accent);}
+  .filter-bar label{
+    display:flex; flex-direction:column; gap:4px;
+    font-size:10.5px; font-family:'JetBrains Mono',monospace; letter-spacing:.05em;
+    text-transform:uppercase; color:var(--ink-soft);
+  }
+  .filter-clear{
+    align-self:flex-end;
+    background:transparent; border:none;
+    color:var(--accent-deep); font-size:12.5px; font-weight:600;
+    cursor:pointer; padding:8px 4px;
+  }
+
+  /* ---------- Chart card ---------- */
+  .chart-card{
+    background:var(--card);
+    border:1px solid #e7e9f2;
+    border-radius:16px;
+    padding:20px 22px;
+    margin:0 0 20px;
+    display:none;
+  }
+  .chart-card.show{display:block;}
+  .chart-card h3{
+    font-family:'Manrope',sans-serif; font-weight:800; font-size:15px; margin:0 0 14px;
+  }
+  .chart-wrap{height:220px; position:relative;}
+
+  footer.credit{
+    text-align:center;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    color:#b6bccf;
+    margin:40px 0 10px;
+  }
+
+  @media (max-width:720px){
+    .topbar{padding:26px 20px 54px;}
+    .wrap{padding:0 16px;}
+    .stats{grid-template-columns:repeat(2,1fr);}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="eyebrow">Checagem · BMA FIDC</div>
+    <h1>Consolidador de Sacados</h1>
+    <p>Carregue a planilha de exportação. A ferramenta limpa o número da duplicata (remove a parcela) e agrupa tudo por sacado, somando o valor total.</p>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div class="dropzone" id="dropzone">
+    <div class="icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#8fa1ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 21h14a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2Z"/></svg>
+    </div>
+    <h3>Solte a planilha aqui</h3>
+    <p>.xlsx com as colunas Empresa, Cedente, NomeSacado, CnpjSacado, Duplicata, Valor</p>
+    <button class="btn" id="pickBtn" type="button">Escolher arquivo</button>
+    <input type="file" id="fileInput" accept=".xlsx,.xls">
+    <div class="filename" id="filename"></div>
+    <div class="alert error" id="errorBox"></div>
+    <div class="alert info" id="infoBox"></div>
+  </div>
+
+  <div class="fb-panel">
+    <div class="fb-status">
+      <div class="fb-dot" id="fbDot"></div>
+      <div>
+        <div class="fb-label" id="fbLabel">Plataforma não conectada</div>
+        <div class="fb-sub" id="fbSub">Configure o Firebase pra sincronizar o status de envio com o robô</div>
+      </div>
+    </div>
+    <div class="fb-actions">
+      <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--ink-soft);">
+        Data da carga
+        <input type="date" id="dataCargaInput" style="font-family:'JetBrains Mono',monospace; font-size:12.5px; padding:6px 8px; border:1.5px solid #dde1ee; border-radius:8px;">
+      </label>
+      <button class="btn secondary" id="fbConfigBtn" type="button">Configurar Firebase</button>
+      <button class="btn" id="fbSyncBtn" type="button" style="display:none;">Enviar para plataforma</button>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="fbModal">
+    <div class="modal">
+      <h3>Conectar ao Firestore</h3>
+      <p>Cole a API Key e o Project ID do seu projeto Firebase (Configurações do projeto &gt; Geral &gt; Seus apps). A coleção é sempre "checagem_envios", não precisa configurar isso.</p>
+      <label>API Key</label>
+      <input type="text" id="cfgApiKey" placeholder="AIzaSy...">
+      <label>Project ID</label>
+      <input type="text" id="cfgProjectId" placeholder="meu-projeto-firebase">
+      <div class="modal-actions">
+        <button class="btn secondary" id="fbCancelBtn" type="button">Cancelar</button>
+        <button class="btn" id="fbSaveBtn" type="button">Salvar e conectar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="statsBox" class="stats" style="display:none;"></div>
+
+  <div class="fb-panel" id="historicoBanner" style="display:none; background:#fdf1e0; border-color:#f3ddb4;">
+    <div class="fb-status">
+      <div class="fb-dot on" style="background:var(--warn); box-shadow:0 0 0 4px var(--warn-bg);"></div>
+      <div>
+        <div class="fb-label" id="historicoBannerLabel">Visualizando carga histórica</div>
+        <div class="fb-sub">Somente leitura — dados desse dia específico</div>
+      </div>
+    </div>
+    <button class="btn secondary" id="voltarAtualBtn" type="button">Voltar para carga atual</button>
+  </div>
+
+  <div class="chart-card" id="chartCard">
+    <h3>Sacados carregados × % enviado × % com retorno</h3>
+    <div class="chart-wrap"><canvas id="statusChart"></canvas></div>
+  </div>
+
+  <div class="table-card" id="tableCard">
+    <div class="tabs" id="tabs">
+      <button class="tab active" data-tab="sacados">Sacados consolidados</button>
+      <button class="tab" data-tab="cedentes">Concentração por Cedente</button>
+      <button class="tab" data-tab="historico">Histórico</button>
+    </div>
+    <div class="table-head">
+      <h2 id="tableTitle">Sacados consolidados</h2>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <div class="search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input type="text" id="searchInput" placeholder="Buscar sacado ou CNPJ...">
+        </div>
+        <button class="btn secondary" id="exportBtn">Baixar .xlsx</button>
+        <button class="btn secondary" id="resetBtn">Novo arquivo</button>
+      </div>
+    </div>
+    <div class="filter-bar" id="filterBar" style="display:none;">
+      <label>Carga
+        <select id="filtroCarga"><option value="">Atual</option></select>
+      </label>
+      <label>Cedente
+        <select id="filtroCedente"><option value="">Todos</option></select>
+      </label>
+      <label>Status de envio
+        <select id="filtroStatusEnvio">
+          <option value="">Todos</option>
+          <option value="enviado">Enviado</option>
+          <option value="pendente">Pendente</option>
+        </select>
+      </label>
+      <label>Status de resposta
+        <select id="filtroStatusResposta">
+          <option value="">Todos</option>
+          <option value="respondido">Respondido</option>
+          <option value="aguardando">Aguardando</option>
+        </select>
+      </label>
+      <label>Data operação
+        <input type="text" id="filtroDataOperacao" placeholder="dd/mm/aaaa">
+      </label>
+      <button class="filter-clear" id="filtroLimparBtn" type="button">Limpar filtros</button>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr id="theadRow"></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="table-foot">
+      <div class="count" id="rowCount"></div>
+    </div>
+  </div>
+
+</div>
+
+<footer class="credit">consolidador de sacados — BMA FIDC</footer>
+
+<script>
+(function(){
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+  const pickBtn = document.getElementById('pickBtn');
+  const filenameEl = document.getElementById('filename');
+  const errorBox = document.getElementById('errorBox');
+  const infoBox = document.getElementById('infoBox');
+  const statsBox = document.getElementById('statsBox');
+  const tableCard = document.getElementById('tableCard');
+  const theadRow = document.getElementById('theadRow');
+  const tbody = document.getElementById('tbody');
+  const rowCount = document.getElementById('rowCount');
+  const searchInput = document.getElementById('searchInput');
+  const exportBtn = document.getElementById('exportBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const fbDot = document.getElementById('fbDot');
+  const fbLabel = document.getElementById('fbLabel');
+  const fbSub = document.getElementById('fbSub');
+  const fbConfigBtn = document.getElementById('fbConfigBtn');
+  const fbSyncBtn = document.getElementById('fbSyncBtn');
+  const fbModal = document.getElementById('fbModal');
+  const fbCancelBtn = document.getElementById('fbCancelBtn');
+  const fbSaveBtn = document.getElementById('fbSaveBtn');
+  const cfgApiKey = document.getElementById('cfgApiKey');
+  const cfgProjectId = document.getElementById('cfgProjectId');
+  const dataCargaInput = document.getElementById('dataCargaInput');
+  const historicoBanner = document.getElementById('historicoBanner');
+  const historicoBannerLabel = document.getElementById('historicoBannerLabel');
+  const voltarAtualBtn = document.getElementById('voltarAtualBtn');
+  const filterBar = document.getElementById('filterBar');
+  const filtroCarga = document.getElementById('filtroCarga');
+  const filtroCedente = document.getElementById('filtroCedente');
+  const filtroStatusEnvio = document.getElementById('filtroStatusEnvio');
+  const filtroStatusResposta = document.getElementById('filtroStatusResposta');
+  const filtroDataOperacao = document.getElementById('filtroDataOperacao');
+  const filtroLimparBtn = document.getElementById('filtroLimparBtn');
+  const chartCard = document.getElementById('chartCard');
+  let statusChart = null;
+
+  function todayISO(){
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+  function isoToBr(iso){
+    if(!iso) return '';
+    const [y,m,d] = iso.split('-');
+    return `${d}/${m}/${y}`;
+  }
+  dataCargaInput.value = todayISO();
+
+  // ====== CONFIGURAÇÃO DO FIREBASE — PREENCHA UMA VEZ SÓ E ESQUECE ======
+  // Cole aqui embaixo o apiKey e o projectId do seu projeto Firebase
+  // (Firebase Console > ⚙️ Configurações do projeto > Geral > Seus apps > bloco firebaseConfig).
+  // Depois de preencher e salvar o arquivo, a plataforma conecta sozinha toda vez que
+  // alguém abrir a página — ninguém mais precisa clicar em "Configurar Firebase".
+  let FIREBASE_CONFIG = {
+    apiKey: '',      // <-- cole aqui, entre as aspas. Ex: 'AIzaSyD...'
+    projectId: '',   // <-- cole aqui, entre as aspas. Ex: 'cartadecessaobma'
+  };
+  const FIRESTORE_COLLECTION = 'checagem_envios'; // fixo, não precisa mexer
+  let fbState = { connected:false, db:null, unsubscribe:null, statusCache:{} };
+
+  let consolidated = [];
+  let cedentes = [];
+  let historico = [];
+  let activeTab = 'sacados';
+  let sortState = {sacados:{col:null, dir:1}, cedentes:{col:null, dir:1}, historico:{col:null, dir:1}};
+  let currentDataCarga = null;    // ISO da carga atualmente ativa na tela
+  let viewingHistorico = false;   // true quando a tabela mostra um dia passado (somente leitura)
+
+  const COLUMNS = {
+    sacados: [
+      {key:'Empresa', label:'Empresa'},
+      {key:'DataOperacao', label:'Data Operação'},
+      {key:'DataCargaExibir', label:'Data da Carga'},
+      {key:'Cedente', label:'Cedente'},
+      {key:'NomeSacado', label:'Sacado'},
+      {key:'CnpjSacado', label:'CNPJ'},
+      {key:'Duplicata', label:'Duplicata(s)'},
+      {key:'ValorTotal', label:'Valor Total'},
+      {key:'StatusEnvioSort', label:'Envio'},
+      {key:'StatusRespostaSort', label:'Resposta'},
+    ],
+    cedentes: [
+      {key:'Cedente', label:'Cedente'},
+      {key:'QtdSacados', label:'Sacados'},
+      {key:'QtdDuplicatas', label:'Duplicatas'},
+      {key:'ValorTotal', label:'Valor Total'},
+      {key:'Concentracao', label:'% do Total'},
+    ],
+    historico: [
+      {key:'DataCargaBr', label:'Data da carga'},
+      {key:'TotalSacados', label:'Sacados'},
+      {key:'TotalCedentes', label:'Cedentes'},
+      {key:'TotalValor', label:'Valor Total'},
+    ],
+  };
+
+  function showError(msg){
+    errorBox.textContent = msg;
+    errorBox.classList.add('show');
+    infoBox.classList.remove('show');
+  }
+  function showInfo(msg){
+    infoBox.textContent = msg;
+    infoBox.classList.add('show');
+    errorBox.classList.remove('show');
+  }
+  function clearAlerts(){
+    errorBox.classList.remove('show');
+    infoBox.classList.remove('show');
+  }
+
+  // ---- Duplicata cleanup (mirrors the Python logic) ----
+  function cleanDuplicata(raw){
+    if(raw === null || raw === undefined) return '';
+    let s = String(raw).trim();
+    if(s === '' || s.toLowerCase() === 'nan') return s;
+    let m = s.match(/^(.*)[-\/][0-9]+$/);
+    if(m) return m[1];
+    if(/^[0-9]+$/.test(s) && s.length === 10) return s.slice(0,8);
+    return s;
+  }
+
+  function excelDateToStr(v){
+    if(v === null || v === undefined || v === '') return '';
+    if(v instanceof Date){
+      return v.toLocaleDateString('pt-BR');
+    }
+    if(typeof v === 'number'){
+      // Excel serial date
+      const d = XLSX.SSF.parse_date_code(v);
+      if(d){
+        const dt = new Date(Date.UTC(d.y, d.m-1, d.d));
+        return dt.toLocaleDateString('pt-BR');
+      }
+    }
+    return String(v);
+  }
+
+  function fmtBRL(n){
+    return n.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+  }
+
+  function fmtPct(n){
+    return n.toLocaleString('pt-BR', {minimumFractionDigits:1, maximumFractionDigits:1}) + '%';
+  }
+
+  // ---- CNPJ/CPF formatting: sistema exige com separadores ----
+  function formatCnpjCpf(raw){
+    const digits = String(raw ?? '').replace(/\D/g, '');
+    if(digits.length === 14){
+      return digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+    }
+    if(digits.length === 11){
+      return digits.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
+    }
+    return String(raw ?? '').trim();
+  }
+
+  function findCol(headers, candidates){
+    for(const c of candidates){
+      const idx = headers.findIndex(h => String(h).trim().toLowerCase() === c.toLowerCase());
+      if(idx !== -1) return idx;
+    }
+    return -1;
+  }
+
+  function processWorkbook(wb){
+    const sheetName = wb.SheetNames[0];
+    const sheet = wb.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(sheet, {header:1, defval:null, raw:true});
+    if(rows.length < 2) throw new Error('A planilha não tem linhas de dados.');
+
+    const headers = rows[0].map(h => String(h||'').trim());
+    const idx = {
+      Empresa: findCol(headers, ['Empresa']),
+      DataOperacao: findCol(headers, ['DataOperação','DataOperacao']),
+      Cedente: findCol(headers, ['Cedente']),
+      NomeSacado: findCol(headers, ['NomeSacado']),
+      CnpjSacado: findCol(headers, ['CnpjSacado']),
+      Duplicata: findCol(headers, ['Duplicata']),
+      Vencimento: findCol(headers, ['Vencimento']),
+      Valor: findCol(headers, ['Valor']),
+    };
+    const required = ['NomeSacado','CnpjSacado','Duplicata','Valor'];
+    const missing = required.filter(k => idx[k] === -1);
+    if(missing.length) throw new Error('Colunas obrigatórias não encontradas: ' + missing.join(', '));
+
+    const groups = new Map();
+    const cedenteGroups = new Map();
+    let totalLinhas = 0;
+    let totalGeral = 0;
+
+    for(let r = 1; r < rows.length; r++){
+      const row = rows[r];
+      if(!row || row.every(c => c === null || c === '')) continue;
+      const cnpj = idx.CnpjSacado !== -1 ? String(row[idx.CnpjSacado] ?? '').trim() : '';
+      const sacado = idx.NomeSacado !== -1 ? String(row[idx.NomeSacado] ?? '').trim() : '';
+      if(!cnpj && !sacado) continue;
+      totalLinhas++;
+
+      const key = cnpj || sacado;
+      const dup = cleanDuplicata(idx.Duplicata !== -1 ? row[idx.Duplicata] : '');
+      const valor = idx.Valor !== -1 ? (parseFloat(row[idx.Valor]) || 0) : 0;
+      const empresa = idx.Empresa !== -1 ? String(row[idx.Empresa] ?? '').trim() : '';
+      const cedente = idx.Cedente !== -1 ? String(row[idx.Cedente] ?? '').trim() : '';
+      const dataOp = idx.DataOperacao !== -1 ? excelDateToStr(row[idx.DataOperacao]) : '';
+      totalGeral += valor;
+
+      if(!groups.has(key)){
+        groups.set(key, {
+          Empresa: new Set(), DataOperacao: new Set(), Cedente: new Set(),
+          NomeSacado: sacado, CnpjSacado: cnpj,
+          Duplicata: new Set(), ValorTotal: 0
+        });
+      }
+      const g = groups.get(key);
+      if(empresa) g.Empresa.add(empresa);
+      if(dataOp) g.DataOperacao.add(dataOp);
+      if(cedente) g.Cedente.add(cedente);
+      if(dup) g.Duplicata.add(dup);
+      g.ValorTotal += valor;
+
+      const cedKey = cedente || '(sem cedente)';
+      if(!cedenteGroups.has(cedKey)){
+        cedenteGroups.set(cedKey, { Sacados: new Set(), Duplicatas: new Set(), ValorTotal: 0 });
+      }
+      const cg = cedenteGroups.get(cedKey);
+      cg.Sacados.add(key);
+      if(dup) cg.Duplicatas.add(cedKey + '|' + key + '|' + dup);
+      cg.ValorTotal += valor;
+    }
+
+    const dataCargaAtual = dataCargaInput.value || todayISO();
+    consolidated = Array.from(groups.values()).map(g => ({
+      Empresa: Array.from(g.Empresa).join(', '),
+      DataOperacao: Array.from(g.DataOperacao).join(', '),
+      DataCargaExibir: isoToBr(dataCargaAtual),
+      Cedente: Array.from(g.Cedente).join(', '),
+      NomeSacado: g.NomeSacado,
+      CnpjSacado: formatCnpjCpf(g.CnpjSacado),
+      CnpjSacadoRaw: g.CnpjSacado,
+      Duplicata: Array.from(g.Duplicata).join(', '),
+      DuplicataCount: g.Duplicata.size,
+      ValorTotal: g.ValorTotal,
+      StatusEnvio: 'pendente',
+      DataEnvio: '',
+      HoraEnvio: '',
+      StatusEnvioSort: 0,
+      RespostaRecebida: false,
+      DataResposta: '',
+      HoraResposta: '',
+      StatusRespostaSort: 0,
+    }));
+    consolidated.sort((a,b) => b.ValorTotal - a.ValorTotal);
+
+    cedentes = Array.from(cedenteGroups.entries()).map(([nome, cg]) => ({
+      Cedente: nome,
+      QtdSacados: cg.Sacados.size,
+      QtdDuplicatas: cg.Duplicatas.size,
+      ValorTotal: cg.ValorTotal,
+      Concentracao: totalGeral > 0 ? (cg.ValorTotal / totalGeral * 100) : 0,
+    }));
+    cedentes.sort((a,b) => b.ValorTotal - a.ValorTotal);
+
+    viewingHistorico = false;
+    historicoBanner.style.display = 'none';
+    currentDataCarga = dataCargaInput.value || todayISO();
+
+    renderStats(totalLinhas, consolidated.length);
+    populateCedenteFiltro();
+    renderChart();
+    applyStatusCache();
+    switchTab('sacados');
+    if(fbState.connected){
+      fbSyncBtn.style.display = 'inline-flex';
+      listenStatus();
+    }
+    showInfo('Consolidado com sucesso: ' + totalLinhas + ' linhas → ' + consolidated.length + ' sacados únicos em ' + cedentes.length + ' cedentes.');
+  }
+
+  function renderStats(totalLinhas, totalSacados){
+    const totalValor = consolidated.reduce((s,r) => s + r.ValorTotal, 0);
+    const maiorSacado = consolidated[0];
+    statsBox.style.display = 'grid';
+    statsBox.innerHTML = `
+      <div class="stat">
+        <div class="label">Linhas originais</div>
+        <div class="value">${totalLinhas.toLocaleString('pt-BR')}</div>
+      </div>
+      <div class="stat">
+        <div class="label">Sacados únicos</div>
+        <div class="value">${totalSacados.toLocaleString('pt-BR')}</div>
+      </div>
+      <div class="stat highlight">
+        <div class="label">Valor total</div>
+        <div class="value">${fmtBRL(totalValor)}</div>
+      </div>
+      <div class="stat">
+        <div class="label">Maior sacado</div>
+        <div class="value" style="font-size:15px; line-height:1.3;">${maiorSacado ? maiorSacado.NomeSacado.slice(0,22) : '—'}</div>
+      </div>
+    `;
+  }
+
+  function populateCedenteFiltro(){
+    const atual = filtroCedente.value;
+    const nomes = Array.from(new Set(consolidated.map(r => r.Cedente).filter(Boolean))).sort((a,b) => a.localeCompare(b, 'pt-BR'));
+    filtroCedente.innerHTML = '<option value="">Todos</option>' + nomes.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+    if(nomes.includes(atual)) filtroCedente.value = atual;
+  }
+
+  function populateCargaFiltro(){
+    const atual = filtroCarga.value;
+    filtroCarga.innerHTML = '<option value="">Atual</option>' + historico.map(h => `<option value="${h.DataCargaISO}">${escapeHtml(h.DataCargaBr)}</option>`).join('');
+    if(atual) filtroCarga.value = atual;
+  }
+
+  function computeMetrics(){
+    const total = consolidated.length;
+    const enviados = consolidated.filter(r => r.StatusEnvio === 'enviado').length;
+    const respondidos = consolidated.filter(r => r.RespostaRecebida).length;
+    return {
+      total, enviados, respondidos,
+      pctEnviado: total ? (enviados/total*100) : 0,
+      pctRetorno: total ? (respondidos/total*100) : 0,
+    };
+  }
+
+  function renderChart(){
+    if(!consolidated.length){ chartCard.classList.remove('show'); return; }
+    const m = computeMetrics();
+    chartCard.classList.add('show');
+    chartCard.querySelector('h3').textContent =
+      `Sacados carregados: ${m.total} · % enviado: ${m.pctEnviado.toFixed(1)}% · % com retorno: ${m.pctRetorno.toFixed(1)}%`;
+    const ctx = document.getElementById('statusChart').getContext('2d');
+    const data = {
+      labels: ['% Enviado', '% Com retorno'],
+      datasets: [{
+        data: [m.pctEnviado, m.pctRetorno],
+        backgroundColor: ['#3d5afe', '#0f9d6b'],
+        borderRadius: 6,
+        maxBarThickness: 56,
+      }],
+    };
+    if(statusChart){ statusChart.data = data; statusChart.update(); return; }
+    statusChart = new Chart(ctx, {
+      type: 'bar',
+      data,
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: { x: { min:0, max:100, ticks:{ callback:v => v+'%' } } },
+        plugins: {
+          legend: { display:false },
+          tooltip: { callbacks: { label: (c) => c.parsed.x.toFixed(1)+'%' } },
+        },
+      },
+    });
+  }
+
+  function statusBadgeHtml(r){
+    if(r.StatusEnvio === 'enviado'){
+      return `<span class="status-badge enviado"><span class="dot"></span>Enviado ${escapeHtml(r.DataEnvio)} ${escapeHtml(r.HoraEnvio)}</span>`;
+    }
+    return `<span class="status-badge pendente"><span class="dot"></span>Pendente</span>`;
+  }
+
+  function respostaBadgeHtml(r){
+    if(r.StatusEnvio !== 'enviado'){
+      return `<span class="status-badge pendente"><span class="dot"></span>—</span>`;
+    }
+    if(r.RespostaRecebida){
+      return `<span class="status-badge enviado"><span class="dot"></span>Respondido ${escapeHtml(r.DataResposta)} ${escapeHtml(r.HoraResposta)}</span>`;
+    }
+    return `<span class="status-badge pendente"><span class="dot"></span>Aguardando</span>`;
+  }
+
+  function rowHtmlSacado(r){
+    return `
+      <tr>
+        <td>${escapeHtml(r.Empresa)}</td>
+        <td>${escapeHtml(r.DataOperacao)}</td>
+        <td>${escapeHtml(r.DataCargaExibir)}</td>
+        <td>${escapeHtml(r.Cedente)}</td>
+        <td>${escapeHtml(r.NomeSacado)}</td>
+        <td class="cnpj">${escapeHtml(r.CnpjSacado)}</td>
+        <td class="wrap-list">${escapeHtml(r.Duplicata)}${r.DuplicataCount>1 ? `<span class="badge">${r.DuplicataCount}x</span>`:''}</td>
+        <td class="num">${fmtBRL(r.ValorTotal)}</td>
+        <td>${statusBadgeHtml(r)}</td>
+        <td>${respostaBadgeHtml(r)}</td>
+      </tr>`;
+  }
+
+  function rowHtmlCedente(r){
+    return `
+      <tr>
+        <td>${escapeHtml(r.Cedente)}</td>
+        <td>${r.QtdSacados}</td>
+        <td>${r.QtdDuplicatas}</td>
+        <td class="num">${fmtBRL(r.ValorTotal)}</td>
+        <td class="num" style="color:var(--ink);">${fmtPct(r.Concentracao)}</td>
+      </tr>`;
+  }
+
+  function rowHtmlHistorico(r){
+    return `
+      <tr class="node" style="cursor:pointer;" onclick="window.__loadCargaDate('${r.DataCargaISO}')">
+        <td><strong>${escapeHtml(r.DataCargaBr)}</strong>${r.DataCargaISO === currentDataCarga ? ' <span class="badge">atual</span>' : ''}</td>
+        <td>${r.TotalSacados}</td>
+        <td>${r.TotalCedentes}</td>
+        <td class="num">${fmtBRL(r.TotalValor)}</td>
+      </tr>`;
+  }
+
+  function currentDataset(){
+    if(activeTab === 'sacados') return consolidated;
+    if(activeTab === 'cedentes') return cedentes;
+    return historico;
+  }
+  function currentRowHtml(){
+    if(activeTab === 'sacados') return rowHtmlSacado;
+    if(activeTab === 'cedentes') return rowHtmlCedente;
+    return rowHtmlHistorico;
+  }
+  function currentUnitLabel(n){
+    if(activeTab === 'sacados') return n + ' sacado' + (n===1?'':'s');
+    if(activeTab === 'cedentes') return n + ' cedente' + (n===1?'':'s');
+    return n + ' carga' + (n===1?'':'s');
+  }
+
+  function switchTab(tab){
+    activeTab = tab;
+    document.querySelectorAll('#tabs .tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+    const titles = {sacados:'Sacados consolidados', cedentes:'Concentração por Cedente', historico:'Histórico de cargas'};
+    document.getElementById('tableTitle').textContent = titles[tab];
+    const placeholders = {sacados:'Buscar sacado ou CNPJ...', cedentes:'Buscar cedente...', historico:'Buscar por data...'};
+    searchInput.placeholder = placeholders[tab];
+    searchInput.value = '';
+    filterBar.style.display = tab === 'sacados' ? 'flex' : 'none';
+    if(tab === 'historico' && fbState.connected) loadHistoricoList();
+    renderTable(currentFiltered());
+  }
+
+  function renderTable(data){
+    const cols = COLUMNS[activeTab];
+    const st = sortState[activeTab];
+    theadRow.innerHTML = cols.map(c =>
+      `<th data-key="${c.key}">${c.label}<span class="arrow">${st.col===c.key ? (st.dir===1?'▲':'▼') : ''}</span></th>`
+    ).join('');
+
+    const rowFn = currentRowHtml();
+    tbody.innerHTML = data.map(rowFn).join('');
+
+    rowCount.textContent = currentUnitLabel(data.length);
+    tableCard.classList.add('show');
+
+    theadRow.querySelectorAll('th').forEach(th => {
+      th.addEventListener('click', () => {
+        const key = th.dataset.key;
+        st.dir = (st.col === key) ? st.dir * -1 : 1;
+        st.col = key;
+        const sorted = [...currentFiltered()].sort((a,b) => {
+          let va = a[key], vb = b[key];
+          if(typeof va === 'number') return (va - vb) * st.dir;
+          return String(va).localeCompare(String(vb), 'pt-BR') * st.dir;
+        });
+        renderTableBodyOnly(sorted);
+      });
+    });
+  }
+
+  function renderTableBodyOnly(data){
+    const rowFn = currentRowHtml();
+    tbody.innerHTML = data.map(rowFn).join('');
+    rowCount.textContent = currentUnitLabel(data.length);
+    const st = sortState[activeTab];
+    theadRow.querySelectorAll('.arrow').forEach(a => a.textContent='');
+    const activeTh = theadRow.querySelector(`th[data-key="${st.col}"] .arrow`);
+    if(activeTh) activeTh.textContent = st.dir===1 ? '▲' : '▼';
+  }
+
+  function currentFiltered(){
+    const q = searchInput.value.trim().toLowerCase();
+    let data = currentDataset();
+    if(activeTab === 'sacados'){
+      if(q){
+        data = data.filter(r =>
+          r.NomeSacado.toLowerCase().includes(q) || r.CnpjSacado.toLowerCase().includes(q) || (r.CnpjSacadoRaw||'').includes(q)
+        );
+      }
+      const cedenteSel = filtroCedente.value;
+      const envioSel = filtroStatusEnvio.value;
+      const respostaSel = filtroStatusResposta.value;
+      const dataOpSel = filtroDataOperacao.value.trim();
+      if(cedenteSel) data = data.filter(r => r.Cedente === cedenteSel);
+      if(envioSel) data = data.filter(r => r.StatusEnvio === envioSel);
+      if(respostaSel === 'respondido') data = data.filter(r => r.RespostaRecebida);
+      if(respostaSel === 'aguardando') data = data.filter(r => r.StatusEnvio === 'enviado' && !r.RespostaRecebida);
+      if(dataOpSel) data = data.filter(r => r.DataOperacao.includes(dataOpSel));
+      return data;
+    }
+    if(!q) return data;
+    if(activeTab === 'historico'){
+      return data.filter(r => r.DataCargaBr.toLowerCase().includes(q));
+    }
+    return data.filter(r => r.Cedente.toLowerCase().includes(q));
+  }
+
+  function escapeHtml(str){
+    return String(str ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  searchInput.addEventListener('input', () => {
+    const filtered = currentFiltered();
+    renderTableBodyOnly(filtered);
+  });
+
+  document.querySelectorAll('#tabs .tab').forEach(t => {
+    t.addEventListener('click', () => switchTab(t.dataset.tab));
+  });
+
+  function handleFile(file){
+    clearAlerts();
+    if(!file) return;
+    filenameEl.textContent = file.name;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try{
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, {type:'array', cellDates:true});
+        processWorkbook(wb);
+      }catch(err){
+        showError('Não consegui processar o arquivo: ' + err.message);
+      }
+    };
+    reader.onerror = () => showError('Erro ao ler o arquivo.');
+    reader.readAsArrayBuffer(file);
+  }
+
+  pickBtn.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+
+  dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('drag'); });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+  dropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropzone.classList.remove('drag');
+    const file = e.dataTransfer.files[0];
+    if(file) handleFile(file);
+  });
+
+  exportBtn.addEventListener('click', () => {
+    if(!consolidated.length) return;
+    const sacadosData = consolidated.map(r => ({
+      Empresa: r.Empresa,
+      DataOperacao: r.DataOperacao,
+      DataCarga: r.DataCargaExibir,
+      Cedente: r.Cedente,
+      NomeSacado: r.NomeSacado,
+      CnpjSacado: r.CnpjSacado,
+      Duplicata: r.Duplicata,
+      ValorTotal: r.ValorTotal,
+      StatusEnvio: r.StatusEnvio === 'enviado' ? 'Enviado' : 'Pendente',
+      DataEnvio: r.DataEnvio,
+      HoraEnvio: r.HoraEnvio,
+      StatusResposta: r.RespostaRecebida ? 'Respondido' : (r.StatusEnvio === 'enviado' ? 'Aguardando' : '—'),
+      DataResposta: r.DataResposta,
+      HoraResposta: r.HoraResposta,
+    }));
+    const cedentesData = cedentes.map(r => ({
+      Cedente: r.Cedente,
+      QtdSacados: r.QtdSacados,
+      QtdDuplicatas: r.QtdDuplicatas,
+      ValorTotal: r.ValorTotal,
+      Concentracao: Number(r.Concentracao.toFixed(2)),
+    }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sacadosData), 'Sacados Consolidados');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(cedentesData), 'Concentração por Cedente');
+    XLSX.writeFile(wb, 'sacados_consolidados.xlsx');
+  });
+
+  resetBtn.addEventListener('click', () => {
+    consolidated = [];
+    cedentes = [];
+    activeTab = 'sacados';
+    sortState = {sacados:{col:null, dir:1}, cedentes:{col:null, dir:1}, historico:{col:null, dir:1}};
+    viewingHistorico = false;
+    currentDataCarga = null;
+    historicoBanner.style.display = 'none';
+    if(fbState.unsubscribe){ fbState.unsubscribe(); fbState.unsubscribe = null; }
+    fbSyncBtn.style.display = 'none';
+    fileInput.value = '';
+    filenameEl.textContent = '';
+    statsBox.style.display = 'none';
+    tableCard.classList.remove('show');
+    chartCard.classList.remove('show');
+    clearAlerts();
+  });
+  // ====== Firestore: conectar, ouvir status em tempo real, sincronizar ======
+  function updateFbPanel(connected, projectId, collection){
+    fbDot.classList.toggle('on', connected);
+    fbDot.classList.toggle('off', !connected);
+    fbLabel.textContent = connected ? 'Conectado ao Firestore' : 'Plataforma não conectada';
+    fbSub.textContent = connected
+      ? `Projeto "${projectId}" · coleção "${collection}" · status de envio em tempo real`
+      : 'Configure o Firebase pra sincronizar o status de envio com o robô';
+  }
+
+  function applyStatusCache(){
+    if(!consolidated.length) return;
+    consolidated.forEach(r => {
+      const compositeKey = currentDataCarga + '_' + r.CnpjSacadoRaw;
+      const cached = fbState.statusCache[compositeKey];
+      if(cached){
+        r.StatusEnvio = cached.statusEnvio || 'pendente';
+        r.DataEnvio = cached.dataEnvio || '';
+        r.HoraEnvio = cached.horaEnvio || '';
+        r.StatusEnvioSort = r.StatusEnvio === 'enviado' ? 1 : 0;
+        r.RespostaRecebida = !!cached.respostaRecebida;
+        r.DataResposta = cached.dataResposta || '';
+        r.HoraResposta = cached.horaResposta || '';
+        r.StatusRespostaSort = r.RespostaRecebida ? 1 : 0;
+      }
+    });
+    if(activeTab === 'sacados') renderTableBodyOnly(currentFiltered());
+    renderChart();
+  }
+
+  function listenStatus(){
+    if(fbState.unsubscribe) fbState.unsubscribe();
+    if(!currentDataCarga) return;
+    fbState.unsubscribe = fbState.db.collection(FIRESTORE_COLLECTION)
+      .where('dataCargaISO', '==', currentDataCarga)
+      .onSnapshot(snap => {
+        const cache = {};
+        snap.forEach(doc => { cache[doc.id] = doc.data(); });
+        fbState.statusCache = cache;
+        applyStatusCache();
+      }, err => {
+        showError('Erro ao ouvir atualizações do Firestore: ' + err.message);
+      });
+  }
+
+  function connectFirebase(apiKey, projectId){
+    try{
+      if(firebase.apps && firebase.apps.length){
+        firebase.app().delete().catch(()=>{});
+      }
+    }catch(e){}
+    try{
+      firebase.initializeApp({ apiKey, projectId });
+      fbState.db = firebase.firestore();
+      updateFbPanel(false, projectId, FIRESTORE_COLLECTION);
+      fbSub.textContent = 'Autenticando...';
+      firebase.auth().signInAnonymously().then(() => {
+        fbState.connected = true;
+        if(currentDataCarga) listenStatus();
+        updateFbPanel(true, projectId, FIRESTORE_COLLECTION);
+        fbSyncBtn.style.display = (consolidated.length && !viewingHistorico) ? 'inline-flex' : 'none';
+        loadHistoricoList();
+      }).catch(err => {
+        fbState.connected = false;
+        updateFbPanel(false);
+        showError('Login anônimo falhou (ative "Anônimo" em Authentication > Sign-in method no console do Firebase): ' + err.message);
+      });
+    }catch(err){
+      fbState.connected = false;
+      updateFbPanel(false);
+      showError('Não consegui conectar ao Firebase: ' + err.message);
+    }
+  }
+
+  async function pushToFirestore(){
+    if(!fbState.connected || !consolidated.length || viewingHistorico) return;
+    fbSyncBtn.disabled = true;
+    fbSyncBtn.textContent = 'Enviando...';
+    try{
+      const dataISO = dataCargaInput.value || todayISO();
+      const dataBr = isoToBr(dataISO);
+      currentDataCarga = dataISO;
+
+      const col = fbState.db.collection(FIRESTORE_COLLECTION);
+      const existingSnap = await col.where('dataCargaISO', '==', dataISO).get();
+      const existingIds = new Set();
+      existingSnap.forEach(doc => existingIds.add(doc.id));
+
+      let totalValor = 0;
+      for(let i = 0; i < consolidated.length; i += 400){
+        const chunk = consolidated.slice(i, i+400);
+        const batch = fbState.db.batch();
+        chunk.forEach(r => {
+          const cnpjKey = r.CnpjSacadoRaw || r.NomeSacado;
+          if(!cnpjKey) return;
+          const docId = dataISO + '_' + cnpjKey;
+          const docRef = col.doc(docId);
+          const data = {
+            dataCargaISO: dataISO,
+            dataCargaBr: dataBr,
+            empresa: r.Empresa,
+            dataOperacao: r.DataOperacao,
+            cedente: r.Cedente,
+            nomeSacado: r.NomeSacado,
+            cnpjSacado: r.CnpjSacado,
+            duplicata: r.Duplicata,
+            valorTotal: r.ValorTotal,
+            atualizadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+          };
+          if(!existingIds.has(docId)){
+            data.statusEnvio = 'pendente';
+            data.dataEnvio = '';
+            data.horaEnvio = '';
+            data.respostaRecebida = false;
+            data.dataResposta = '';
+            data.horaResposta = '';
+          }
+          batch.set(docRef, data, {merge:true});
+        });
+        await batch.commit();
+        totalValor += chunk.reduce((s,r) => s + r.ValorTotal, 0);
+      }
+
+      await fbState.db.collection('cargas').doc(dataISO).set({
+        dataCargaISO: dataISO,
+        dataCargaBr: dataBr,
+        totalSacados: consolidated.length,
+        totalCedentes: cedentes.length,
+        totalValor: consolidated.reduce((s,r) => s + r.ValorTotal, 0),
+        atualizadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+      }, {merge:true});
+
+      listenStatus();
+      showInfo('Enviado para a plataforma: ' + consolidated.length + ' sacados sincronizados no Firestore, na carga de ' + dataBr + '.');
+      loadHistoricoList();
+    }catch(err){
+      showError('Erro ao sincronizar com o Firestore: ' + err.message);
+    }finally{
+      fbSyncBtn.disabled = false;
+      fbSyncBtn.textContent = 'Enviar para plataforma';
+    }
+  }
+
+  async function loadHistoricoList(){
+    if(!fbState.connected) return;
+    try{
+      const snap = await fbState.db.collection('cargas').orderBy('dataCargaISO', 'desc').limit(60).get();
+      historico = snap.docs.map(doc => {
+        const d = doc.data();
+        return {
+          DataCargaISO: d.dataCargaISO || doc.id,
+          DataCargaBr: d.dataCargaBr || isoToBr(doc.id),
+          TotalSacados: d.totalSacados || 0,
+          TotalCedentes: d.totalCedentes || 0,
+          TotalValor: d.totalValor || 0,
+        };
+      });
+      if(activeTab === 'historico') renderTable(historico);
+      populateCargaFiltro();
+    }catch(err){
+      showError('Erro ao carregar o histórico: ' + err.message);
+    }
+  }
+
+  async function loadCargaDate(dataISO){
+    if(!fbState.connected) return;
+    try{
+      const snap = await fbState.db.collection(FIRESTORE_COLLECTION).where('dataCargaISO', '==', dataISO).get();
+      const rows = snap.docs.map(doc => {
+        const d = doc.data();
+        const dupList = (d.duplicata || '').split(',').map(s => s.trim()).filter(Boolean);
+        return {
+          Empresa: d.empresa || '',
+          DataOperacao: d.dataOperacao || '',
+          DataCargaExibir: d.dataCargaBr || isoToBr(dataISO),
+          Cedente: d.cedente || '',
+          NomeSacado: d.nomeSacado || '',
+          CnpjSacado: d.cnpjSacado || '',
+          CnpjSacadoRaw: (d.cnpjSacado || '').replace(/\D/g,''),
+          Duplicata: d.duplicata || '',
+          DuplicataCount: dupList.length,
+          ValorTotal: d.valorTotal || 0,
+          StatusEnvio: d.statusEnvio || 'pendente',
+          DataEnvio: d.dataEnvio || '',
+          HoraEnvio: d.horaEnvio || '',
+          StatusEnvioSort: d.statusEnvio === 'enviado' ? 1 : 0,
+          RespostaRecebida: !!d.respostaRecebida,
+          DataResposta: d.dataResposta || '',
+          HoraResposta: d.horaResposta || '',
+          StatusRespostaSort: d.respostaRecebida ? 1 : 0,
+        };
+      });
+      rows.sort((a,b) => b.ValorTotal - a.ValorTotal);
+      consolidated = rows;
+      currentDataCarga = dataISO;
+      viewingHistorico = true;
+      if(fbState.unsubscribe){ fbState.unsubscribe(); fbState.unsubscribe = null; }
+      renderStats(rows.length, rows.length);
+      populateCedenteFiltro();
+      renderChart();
+      historicoBanner.style.display = 'flex';
+      historicoBannerLabel.textContent = 'Visualizando carga de ' + isoToBr(dataISO);
+      fbSyncBtn.style.display = 'none';
+      switchTab('sacados');
+    }catch(err){
+      showError('Erro ao carregar a carga de ' + isoToBr(dataISO) + ': ' + err.message);
+    }
+  }
+  window.__loadCargaDate = loadCargaDate;
+
+  voltarAtualBtn.addEventListener('click', () => {
+    viewingHistorico = false;
+    historicoBanner.style.display = 'none';
+    consolidated = [];
+    cedentes = [];
+    currentDataCarga = null;
+    statsBox.style.display = 'none';
+    tableCard.classList.remove('show');
+    chartCard.classList.remove('show');
+    clearAlerts();
+    fileInput.value = '';
+    filenameEl.textContent = '';
+  });
+
+  [filtroCedente, filtroStatusEnvio, filtroStatusResposta].forEach(el => {
+    el.addEventListener('change', () => renderTableBodyOnly(currentFiltered()));
+  });
+  filtroDataOperacao.addEventListener('input', () => renderTableBodyOnly(currentFiltered()));
+  filtroCarga.addEventListener('change', () => {
+    const val = filtroCarga.value;
+    if(val) loadCargaDate(val);
+    else loadCargaDate(todayISO());
+  });
+  filtroLimparBtn.addEventListener('click', () => {
+    filtroCedente.value = '';
+    filtroStatusEnvio.value = '';
+    filtroStatusResposta.value = '';
+    filtroDataOperacao.value = '';
+    searchInput.value = '';
+    renderTableBodyOnly(currentFiltered());
+  });
+
+  fbConfigBtn.addEventListener('click', () => {
+    cfgApiKey.value = FIREBASE_CONFIG.apiKey || '';
+    cfgProjectId.value = FIREBASE_CONFIG.projectId || '';
+    fbModal.classList.add('show');
+  });
+  fbCancelBtn.addEventListener('click', () => fbModal.classList.remove('show'));
+  fbModal.addEventListener('click', (e) => { if(e.target === fbModal) fbModal.classList.remove('show'); });
+  fbSaveBtn.addEventListener('click', () => {
+    const apiKey = cfgApiKey.value.trim();
+    const projectId = cfgProjectId.value.trim();
+    if(!apiKey || !projectId){ showError('Preencha API Key e Project ID.'); return; }
+    FIREBASE_CONFIG = {apiKey, projectId};
+    fbModal.classList.remove('show');
+    connectFirebase(apiKey, projectId);
+  });
+  fbSyncBtn.addEventListener('click', pushToFirestore);
+
+  if(FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.projectId){
+    connectFirebase(FIREBASE_CONFIG.apiKey, FIREBASE_CONFIG.projectId);
+  }
+})();
+</script>
+
+</body>
+</html>
